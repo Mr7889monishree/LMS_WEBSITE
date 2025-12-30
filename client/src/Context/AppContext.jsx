@@ -3,13 +3,16 @@ import { createContext, useEffect, useState } from "react";
 import {dummyCourses } from "../assets/assets";
 import { useNavigate } from "react-router-dom";
 import humanizeDuration from 'humanize-duration'
-
+import {useAuth,useUser} from '@clerk/clerk-react'
 
 export const AppContext = createContext();
 
 export const AppContextProvider=({children})=>{
 
     const currency = import.meta.env.VITE_CURRENCY;
+    //get auth and get user from clerk for generating auth token
+    const {getToken}=useAuth();//we will get JWT token assigned to signed in user
+    const {user}=useUser();//to get the signed in user
     const [allcourses,setAllCourses]=useState([]); // so whenever we run this app the courses data from asset file should be stored into this allcourses array here so for that we have to create a function to store that.
     const [isEducator,setIsEducator] = useState(true);
     const [enrolledcourses,setEnrolledCourses] = useState([]);
@@ -64,6 +67,24 @@ export const AppContextProvider=({children})=>{
         fetchAllCourses();
         fetchUserEnrolledCourses();
     },[])
+    const logToken=async()=>{
+        //displays the token
+        try {
+            const token=await getToken();
+            if(!token) return;
+            console.log("TOKEN:",token);
+        } catch (error) {
+            console.log("getToken error",error.message);
+            
+        }
+    }
+    useEffect(()=>{
+        //if user is signed in
+        if(!user){
+            return ;
+        }
+        logToken(); //if user is signed in give the token for that user
+    },[user]);
 
     //creation of object to be added to the ContextProvider file which will be support for entire application
     const value={

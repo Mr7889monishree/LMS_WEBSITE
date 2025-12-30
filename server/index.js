@@ -1,35 +1,45 @@
-import express from "express";
-import cors from "cors";
-import "dotenv/config";
-import connectDB from "./configs/mongodb.js";
-import clerkWebhooks from "./controllers/webhook.js";
+import express, { raw } from 'express'
+import cors from 'cors'
+import 'dotenv/config'
+import connectDB from './configs/mongodb.js';
+import { clerkMiddleware } from '@clerk/express';
+import {clerkWebhooks,stripeWebhooks} from './controllers/webhook.js';
+import educatorRouter from './routes/educatorRoutes.js';
+import connectCloudinary from './configs/cloudinary.js';
+import courseRouter from './routes/courseRoutes.js';
+import userRouter from './routes/userRoutes.js';
 
-// initialization
-const app = express();
 
-// connect to database
+//initialize express app
+const app=express();
+
+//connect to database
 await connectDB();
+await connectCloudinary();
 
-// middleware
+//webhook-routes
+app.post('/clerk',
+    express.raw({type:"application/json"}),
+    clerkWebhooks
+)
+app.post('/stripe',
+    express.raw({type:"application/json"}),
+    stripeWebhooks
+)
+//middlewares
 app.use(cors());
-
-// ✅ WEBHOOK ROUTE — MUST COME BEFORE express.json()
-app.post(
-  "/clerk",
-  express.raw({ type: "application/json" }),
-  clerkWebhooks
-);
-
-// ✅ normal JSON middleware for rest of the app
+app.use(clerkMiddleware());//this enables the usage of auth middleware in all requests
 app.use(express.json());
+//routes
+app.use('/api/educator',educatorRouter);
+app.use('/api/course',courseRouter);
+app.use('/api/user',userRouter);
+app.get('/',(req,res)=>{
+    res.status(200).send("API WORKING!");
+})
 
-// routes
-app.get("/", (req, res) => {
-  res.status(200).send("API WORKING!");
-});
-
-// port
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+//port
+const PORT=process.env.PORT||5000;
+app.listen(PORT,()=>{
+    console.log(`The server is running in port no:${PORT}`);
+})
