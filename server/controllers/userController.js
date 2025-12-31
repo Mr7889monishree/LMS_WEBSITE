@@ -85,7 +85,7 @@ export const purchaseCourse = async (req, res) => {
     });
 
     // Return session ID (frontend handles redirect)
-    res.status(200).json({ success: true, sessionId: session.url });
+    res.status(200).json({ success: true, url: session.url });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: error.message });

@@ -1,6 +1,17 @@
-import React from 'react'
-
+import { useEffect } from 'react';
+import {useNavigate, useParams } from 'react-router-dom'
 const Loading = () => {
+  const navigate = useNavigate();
+  const { path } = useParams();
+
+  useEffect(() => {
+    // small delay to allow webhook/db sync
+    const timer = setTimeout(() => {
+      navigate(`/${path}`)
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [navigate, path])
   return (
     
     <div className='min-h-screen flex items-center justify-center'>
