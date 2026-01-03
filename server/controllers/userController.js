@@ -1,5 +1,4 @@
 import { getAuth } from "@clerk/express";
-import mongoose from "mongoose";
 import Stripe from "stripe";
 
 import User from "../models/User.js";
@@ -16,7 +15,7 @@ export const getUserData = async (req, res) => {
   try {
     const { userId } = getAuth(req);
 
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
@@ -38,7 +37,7 @@ export const usersEnrolledCourses = async (req, res) => {
   try {
     const { userId } = getAuth(req);
 
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
@@ -62,12 +61,7 @@ export const purchaseCourse = async (req, res) => {
     const { origin } = req.headers;
     const { userId } = getAuth(req);
 
-    if (
-      !userId ||
-      !courseId ||
-      !mongoose.Types.ObjectId.isValid(userId) ||
-      !mongoose.Types.ObjectId.isValid(courseId)
-    ) {
+    if (!userId ||!courseId ) {
       return res.status(400).json({ success: false, message: "Invalid request" });
     }
 
@@ -129,13 +123,7 @@ export const updateCourseProgress = async (req, res) => {
     const { userId } = getAuth(req);
     const { courseId, lectureId } = req.body;
 
-    if (
-      !userId ||
-      !courseId ||
-      !lectureId ||
-      !mongoose.Types.ObjectId.isValid(userId) ||
-      !mongoose.Types.ObjectId.isValid(courseId)
-    ) {
+    if (!userId ||!courseId ) {
       return res.status(400).json({ success: false, message: "Invalid data" });
     }
 
@@ -170,12 +158,7 @@ export const getUserCourseProgress = async (req, res) => {
     const { userId } = getAuth(req);
     const { courseId } = req.body;
 
-    if (
-      !userId ||
-      !courseId ||
-      !mongoose.Types.ObjectId.isValid(userId) ||
-      !mongoose.Types.ObjectId.isValid(courseId)
-    ) {
+    if (!userId ||courseId) {
       return res.status(400).json({ success: false, message: "Invalid data" });
     }
 
@@ -194,14 +177,7 @@ export const addUserRating = async (req, res) => {
     const { userId } = getAuth(req);
     const { courseId, rating } = req.body;
 
-    if (
-      !userId ||
-      !courseId ||
-      !mongoose.Types.ObjectId.isValid(userId) ||
-      !mongoose.Types.ObjectId.isValid(courseId) ||
-      rating < 1 ||
-      rating > 5
-    ) {
+    if (!userId ||!courseId ||rating < 1 ||rating > 5) {
       return res.status(400).json({ success: false, message: "Invalid details" });
     }
 
