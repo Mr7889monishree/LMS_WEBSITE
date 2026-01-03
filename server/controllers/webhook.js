@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import Stripe from "stripe";
 import Purchase from "../models/Purchase.js";
 import Course from "../models/course.js";
+import mongoose from "mongoose";
 
 export const clerkWebhooks = async (req, res) => {
     try {
@@ -52,43 +53,66 @@ export const clerkWebhooks = async (req, res) => {
 //stripe instance
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-export const stripeWebhooks = async (req, res) => {
-  const sig = req.headers['stripe-signature'];
 
+export const stripeWebhooks = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
   let event;
+
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
   } catch (err) {
-    console.error('Webhook signature verification failed', err.message);
+    console.error("Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-    const purchaseId = session.metadata.purchaseId;
+    const purchaseId = session.metadata?.purchaseId;
 
-    try {
-      const purchase = await Purchase.findById(purchaseId);
-      const user = await User.findById(purchase.userId);
-      const course = await Course.findById(purchase.courseId);
-
-      // Update DB
-      course.enrolledStudents.push(user._id);
-      await course.save();
-
-      user.enrolledCourses.push(course._id);
-      await user.save();
-
-      purchase.status = 'completed';
-      await purchase.save();
-
-      console.log(`Purchase ${purchaseId} completed`);
-    } catch (err) {
-      console.error('Error updating DB after webhook', err);
+    // HARD GUARDS
+    if (!purchaseId || !mongoose.Types.ObjectId.isValid(purchaseId)) {
+      console.error("Invalid purchaseId in metadata:", session.metadata);
+      return res.json({ received: true });
     }
+
+    const purchase = await Purchase.findById(purchaseId);
+    if (!purchase) {
+      console.error("Purchase not found:", purchaseId);
+      return res.json({ received: true });
+    }
+
+    // IDEMPOTENCY
+    if (purchase.status === "completed") {
+      return res.json({ received: true });
+    }
+
+    const user = await User.findById(purchase.userId);
+    const course = await Course.findById(purchase.courseId);
+
+    if (!user || !course) {
+      console.error("User or Course missing for purchase:", purchaseId);
+      return res.json({ received: true });
+    }
+
+    // SAFE UPDATES
+    await Course.findByIdAndUpdate(course._id, {
+      $addToSet: { enrolledStudents: user._id },
+    });
+
+    await User.findByIdAndUpdate(user._id, {
+      $addToSet: { enrolledCourses: course._id },
+    });
+
+    purchase.status = "completed";
+    await purchase.save();
+
+    console.log(`Purchase ${purchaseId} completed`);
   }
 
-  // respond 200 to Stripe
   res.json({ received: true });
 };
 

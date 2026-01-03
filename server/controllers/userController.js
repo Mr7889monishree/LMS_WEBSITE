@@ -4,6 +4,7 @@ import Course from '../models/course.js';
 import Purchase from '../models/Purchase.js';
 import Stripe from "stripe";
 import CourseProgress from '../models/CourseProgress.js';
+import mongoose from 'mongoose';
 
 export const getUserData=async(req,res)=>{
     try {
@@ -34,58 +35,72 @@ export const usersEnrolledCourses=async(req,res)=>{
     }
 }
 
-//controller function to purchase any course
+
 export const purchaseCourse = async (req, res) => {
   try {
     const { courseId } = req.body;
     const { origin } = req.headers;
     const { userId } = getAuth(req);
 
+    // AUTH GUARD
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    // ID VALIDATION
+    if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: "Invalid courseId" });
+    }
+
     const userData = await User.findById(userId);
     const courseData = await Course.findById(courseId);
 
     if (!userData || !courseData) {
-      return res.status(404).json({ success: false, message: 'User or course not found' });
+      return res.status(404).json({ success: false, message: "User or course not found" });
     }
 
-    // Calculate the discounted amount
+    // PRICE CALCULATION
     const amount = Number(
-      (courseData.coursePrice - (courseData.discount * courseData.coursePrice) / 100).toFixed(2)
+      (courseData.coursePrice -
+        (courseData.discount * courseData.coursePrice) / 100
+      ).toFixed(2)
     );
 
-    // Store purchase in DB
-    const newPurchase = await Purchase.create({
-      courseId: courseData._id,
+    // CREATE PENDING PURCHASE
+    const purchase = await Purchase.create({
       userId,
-      amount
+      courseId,
+      amount,
+      status: "pending",
     });
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     const currency = process.env.CURRENCY.toLowerCase();
 
-    // Create Stripe line item
-    const lineItems = [
-      {
-        price_data: {
-          currency,
-          product_data: { name: courseData.courseTitle },
-          unit_amount: Math.floor(amount * 100), // convert dollars to cents
-        },
-        quantity: 1,
-      },
-    ];
-
-    // Create checkout session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'payment',
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency,
+            product_data: {
+              name: courseData.courseTitle,
+            },
+            unit_amount: Math.round(amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
       success_url: `${origin}/loading/my-enrollments`,
       cancel_url: `${origin}/`,
-      metadata: { purchaseId: newPurchase._id.toString() }
+      metadata: {
+        purchaseId: purchase._id.toString(),
+        userId: userId.toString(),
+        courseId: courseId.toString(),
+      },
     });
 
-    // Return session ID (frontend handles redirect)
     res.status(200).json({ success: true, url: session.url });
   } catch (error) {
     console.error(error);
