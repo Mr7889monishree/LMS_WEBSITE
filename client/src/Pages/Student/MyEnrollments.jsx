@@ -1,26 +1,48 @@
-import React, { useContext, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { AppContext } from '../../Context/AppContext';
-import { assets } from '../../assets/assets';
 import {Line} from 'rc-progress'
 import Footer from '../../Components/Student/Footer';
+import { toast } from 'react-toastify';
+import axios from 'axios';
 
 const MyEnrollments = () => {
-  const {enrolledcourses,fetchUserEnrolledCourses,courseDuration,navigate}=useContext(AppContext);
-  const [progressArray,SetProgressArray]=useState([
-    {lectureCompleted:2,totalLectures:4},
-    {lectureCompleted:1,totalLectures:5},
-    {lectureCompleted:3,totalLectures:6},
-    {lectureCompleted:2,totalLectures:4},
-    {lectureCompleted:0,totalLectures:3},
-    {lectureCompleted:5,totalLectures:7},
-    {lectureCompleted:5,totalLectures:5},
-    {lectureCompleted:6,totalLectures:8},
-    {lectureCompleted:4,totalLectures:7},
-    {lectureCompleted:7,totalLectures:7},
-    {lectureCompleted:1,totalLectures:4},
-    {lectureCompleted:0,totalLectures:2},
-    {lectureCompleted:4,totalLectures:4},
-  ])
+  const {enrolledcourses,fetchUserEnrolledCourses,courseDuration,navigate,userData,
+    backendUrl,getToken,CalculateNoOfLectures
+  }=useContext(AppContext);
+  const [progressArray,SetProgressArray]=useState([])
+
+  //function for getting course progress from backend
+  const getCourseProgress=async()=>{
+    try {
+      const token=await getToken();
+      //function that will get progress data of multiple courses so we need multiple async operation and to handle that follow given below code
+      const tempProgressArray=await Promise.all(
+        enrolledcourses.map(async(course)=>{
+          const {data}=await axios.post(`${backendUrl}/api/user/get-course-progres`,{courseId:course._id},
+            {headers:{Authorization:`Bearer ${token}`}}
+          )
+           let totalLectures=CalculateNoOfLectures(course);
+            const lectureCompleted = data?.progressData?. lectureCompleted?.length || 0;
+
+          return {totalLectures,lectureCompleted,courseId:course._id};
+        })
+      )
+      SetProgressArray(tempProgressArray);
+
+    } catch (error) {
+      toast.error(error.message);
+    }
+  }
+  useEffect(()=>{
+    if(userData){
+      fetchUserEnrolledCourses();
+    }
+  },[userData])
+  useEffect(()=>{
+    if(enrolledcourses.length > 0){
+      getCourseProgress();
+    }
+  },[enrolledcourses])
   return (
     <>
       <div className='md:px-36 px-8 pt-10'>
@@ -57,18 +79,22 @@ const MyEnrollments = () => {
                     {courseDuration(course)}
                   </td>
                   <td className='px-4 py-3 max-sm:hidden'>
-                    {/**lectures completed out of total lectures */}
-                    {progressArray[index] && `${progressArray[index].lectureCompleted}/${progressArray[index].totalLectures}`}<span>Lectures</span>
-                  </td>
-                  <td className='px-4 py-3 max-sm:text-right'>
-                    <button
-                    onClick={()=>navigate('/player/' + course._id)}
-                    className='px-4 sm:px-6 py-2 sm:py-3
-                    bg-blue-600 max-sm:text-xs text-white rounded'>
-                      {progressArray[index] && progressArray[index].lectureCompleted /
-                      progressArray[index].totalLectures === 1 ? 'Completed' : 'Ongoing'}
-                      </button>
-                  </td>
+  {progressArray[index] 
+    ? `${progressArray[index].lectureCompleted}/${progressArray[index].totalLectures} Lectures` 
+    : '0 Lecture'}
+      </td>
+
+      <td className='px-4 py-3 max-sm:text-right'>
+        <button
+          onClick={()=>navigate('/player/' + course._id)}
+          className='px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 max-sm:text-xs text-white rounded'
+        >
+          {progressArray[index] && progressArray[index].totalLectures > 0 &&
+          progressArray[index].lectureCompleted / progressArray[index].totalLectures === 1 
+            ? 'Completed' : 'Ongoing'}
+        </button>
+      </td>
+
                 </tr>
               ))}
             </tbody>

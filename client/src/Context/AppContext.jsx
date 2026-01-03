@@ -97,6 +97,7 @@ export const AppContextProvider=({children})=>{
             if(Array.isArray(chapter.chapterContent)){
                 totalLectures+=chapter.chapterContent.length;
             }
+            
         });
         return totalLectures;
 
