@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useState } from 'react'
 import { AppContext } from '../../Context/AppContext';
 import {Line} from 'rc-progress'
 import Footer from '../../Components/Student/Footer';
@@ -18,7 +18,7 @@ const MyEnrollments = () => {
       //function that will get progress data of multiple courses so we need multiple async operation and to handle that follow given below code
       const tempProgressArray=await Promise.all(
         enrolledcourses.map(async(course)=>{
-          const {data}=await axios.post(`${backendUrl}/api/user/get-course-progres`,{courseId:course._id},
+          const {data}=await axios.get(`${backendUrl}/api/user/get-course-progress`,{courseId:course._id},
             {headers:{Authorization:`Bearer ${token}`}}
           )
            let totalLectures=CalculateNoOfLectures(course);

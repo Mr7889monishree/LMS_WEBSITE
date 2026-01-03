@@ -121,7 +121,7 @@ export const purchaseCourse = async (req, res) => {
 export const updateCourseProgress = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const { courseId, lectureId } = req.body;
+    const { courseId, lectureId } = req.body || {};
 
     if (!userId ||!courseId ) {
       return res.status(400).json({ success: false, message: "Invalid data" });
@@ -130,12 +130,12 @@ export const updateCourseProgress = async (req, res) => {
     let progressData = await CourseProgress.findOne({ userId, courseId });
 
     if (progressData) {
-      if (progressData.lectureCompleted.includes(lectureId)) {
+      if (!progressData.lectureCompleted.includes(lectureId)) {
+        progressData.lectureCompleted.push(lectureId);
+        await progressData.save();
+      } else {
         return res.json({ success: true, message: "Lecture already completed" });
       }
-
-      progressData.lectureCompleted.push(lectureId);
-      await progressData.save();
     } else {
       await CourseProgress.create({
         userId,
@@ -156,7 +156,7 @@ export const updateCourseProgress = async (req, res) => {
 export const getUserCourseProgress = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const { courseId } = req.body;
+    const { courseId } = req.body || {};
 
     if (!userId ||courseId) {
       return res.status(400).json({ success: false, message: "Invalid data" });
