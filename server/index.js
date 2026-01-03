@@ -1,4 +1,4 @@
-import express, { raw } from 'express'
+import express from 'express'
 import cors from 'cors'
 import 'dotenv/config'
 import connectDB from './configs/mongodb.js';
@@ -17,19 +17,24 @@ const app=express();
 await connectDB();
 await connectCloudinary();
 
-//webhook-routes
-app.post('/clerk',
-    express.raw({type:"application/json"}),
-    clerkWebhooks
-)
-app.post('/stripe',
-    express.raw({type:"application/json"}),
-    stripeWebhooks
-)
-//middlewares
+// middlewares FIRST
 app.use(cors());
-app.use(clerkMiddleware());//this enables the usage of auth middleware in all requests
 app.use(express.json());
+app.use(clerkMiddleware());
+
+// webhooks AFTER (isolated)
+app.post(
+  '/clerk',
+  express.raw({ type: 'application/json' }),
+  clerkWebhooks
+);
+
+app.post(
+  '/stripe',
+  express.raw({ type: 'application/json' }),
+  stripeWebhooks
+);
+
 //routes
 app.use('/api/educator',educatorRouter);
 app.use('/api/course',courseRouter);

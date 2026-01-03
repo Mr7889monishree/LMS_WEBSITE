@@ -123,7 +123,7 @@ export const updateCourseProgress = async (req, res) => {
     const { userId } = getAuth(req);
     const { courseId, lectureId } = req.body || {};
 
-    if (!userId ||!courseId ) {
+    if (!userId ||!courseId || !lectureId ) {
       return res.status(400).json({ success: false, message: "Invalid data" });
     }
 
@@ -156,14 +156,14 @@ export const updateCourseProgress = async (req, res) => {
 export const getUserCourseProgress = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const { courseId } = req.body || {};
+    const { courseId } = req.query;
 
     if (!userId ||courseId) {
       return res.status(400).json({ success: false, message: "Invalid data" });
     }
 
     const progressData = await CourseProgress.findOne({ userId, courseId });
-    res.json({ success: true, progressData });
+    res.json({ success: true, progressData:progressData || {lectureCompleted:[]} });
   } catch (error) {
     res.json({ success: false, message: error.message });
   }
