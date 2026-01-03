@@ -1,55 +1,74 @@
-import {getAuth} from '@clerk/express';
-import User from '../models/User.js';
-import Course from '../models/course.js';
-import Purchase from '../models/Purchase.js';
+import { getAuth } from "@clerk/express";
+import mongoose from "mongoose";
 import Stripe from "stripe";
-import CourseProgress from '../models/CourseProgress.js';
-import mongoose from 'mongoose';
 
-export const getUserData=async(req,res)=>{
-    try {
-        const {userId}=getAuth(req);
-        const user=await User.findById(userId);
-        
-        //if user doesnt exist
-        if(!user){
-            return res.json({success:false,message:'User not found'});
-        }
-        res.json({success:true,user});
-    } catch (error) {
-        res.json({success:false,message:error.message});
+import User from "../models/User.js";
+import Course from "../models/course.js";
+import Purchase from "../models/Purchase.js";
+import CourseProgress from "../models/CourseProgress.js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+/* =========================
+   GET USER DATA
+========================= */
+export const getUserData = async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-}
 
-export const usersEnrolledCourses=async(req,res)=>{
-    try {
-        const {userId}=getAuth(req);
-        const userData=await User.findById(userId).populate('enrolledCourses');
-
-        res.json({success:true,enrolledCourses:userData.enrolledCourses});
-        
-        
-    } catch (error) {
-        res.json({success:false,message:error.message});
-
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
     }
-}
 
+    res.json({ success: true, user });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
 
+/* =========================
+   USER ENROLLED COURSES
+========================= */
+export const usersEnrolledCourses = async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userData = await User.findById(userId).populate("enrolledCourses");
+    if (!userData) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, enrolledCourses: userData.enrolledCourses });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
+/* =========================
+   PURCHASE COURSE
+========================= */
 export const purchaseCourse = async (req, res) => {
   try {
     const { courseId } = req.body;
     const { origin } = req.headers;
     const { userId } = getAuth(req);
 
-    // AUTH GUARD
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    // ID VALIDATION
-    if (!courseId || !mongoose.Types.ObjectId.isValid(courseId)) {
-      return res.status(400).json({ success: false, message: "Invalid courseId" });
+    if (
+      !userId ||
+      !courseId ||
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(courseId)
+    ) {
+      return res.status(400).json({ success: false, message: "Invalid request" });
     }
 
     const userData = await User.findById(userId);
@@ -59,14 +78,13 @@ export const purchaseCourse = async (req, res) => {
       return res.status(404).json({ success: false, message: "User or course not found" });
     }
 
-    // PRICE CALCULATION
     const amount = Number(
-      (courseData.coursePrice -
+      (
+        courseData.coursePrice -
         (courseData.discount * courseData.coursePrice) / 100
       ).toFixed(2)
     );
 
-    // CREATE PENDING PURCHASE
     const purchase = await Purchase.create({
       userId,
       courseId,
@@ -74,19 +92,14 @@ export const purchaseCourse = async (req, res) => {
       status: "pending",
     });
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    const currency = process.env.CURRENCY.toLowerCase();
-
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
       line_items: [
         {
           price_data: {
-            currency,
-            product_data: {
-              name: courseData.courseTitle,
-            },
+            currency: process.env.CURRENCY.toLowerCase(),
+            product_data: { name: courseData.courseTitle },
             unit_amount: Math.round(amount * 100),
           },
           quantity: 1,
@@ -108,95 +121,113 @@ export const purchaseCourse = async (req, res) => {
   }
 };
 
-//Controller Function - To Update User Course Progress
-export const updateCourseProgress=async(req,res)=>{
+/* =========================
+   UPDATE COURSE PROGRESS
+========================= */
+export const updateCourseProgress = async (req, res) => {
   try {
-    //to update the progress of particular course
-    //1)user is required
-    //2) the particular course user is learning and lecture details are required
-    const {userId}=getAuth(req);
-    const {courseId,lectureId}=req.body;
-    const progressData=await CourseProgress.findOne({userId,courseId});
-    if(progressData){
-      //if the lectureId is included in completed section
-      if(progressData.lectureCompleted.includes(lectureId)){
-        return res.json({success:true,message:'Lecture Already Completed'});
+    const { userId } = getAuth(req);
+    const { courseId, lectureId } = req.body;
+
+    if (
+      !userId ||
+      !courseId ||
+      !lectureId ||
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(courseId)
+    ) {
+      return res.status(400).json({ success: false, message: "Invalid data" });
+    }
+
+    let progressData = await CourseProgress.findOne({ userId, courseId });
+
+    if (progressData) {
+      if (progressData.lectureCompleted.includes(lectureId)) {
+        return res.json({ success: true, message: "Lecture already completed" });
       }
-      //if the lectureId is not present in completed section then we need to push to mark it as complete if its completed then it will be added here
+
       progressData.lectureCompleted.push(lectureId);
       await progressData.save();
+    } else {
+      await CourseProgress.create({
+        userId,
+        courseId,
+        lectureCompleted: [lectureId],
+      });
     }
-      //progressData doesnt exist
-      else{
-        await CourseProgress.create({
-          userId,
-          courseId,
-          lectureCompleted:[lectureId]
 
-        })
-      
-    }
-    res.json({success:true, message:'Progress Updated'});
-
+    res.json({ success: true, message: "Progress updated" });
   } catch (error) {
-    res.json({success:false,message:error.message});
-    
+    res.json({ success: false, message: error.message });
   }
-}
+};
 
-//Controller Function that provide use the CourseProgress details
-export const getUserCourseProgress=async(req,res)=>{
+/* =========================
+   GET USER COURSE PROGRESS
+========================= */
+export const getUserCourseProgress = async (req, res) => {
   try {
-    const {userId}=getAuth(req);
-    const {courseId}=req.body;
-    const progressData=await CourseProgress.findOne({userId,courseId});
-    res.json({success:true,progressData});
+    const { userId } = getAuth(req);
+    const { courseId } = req.body;
 
+    if (
+      !userId ||
+      !courseId ||
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(courseId)
+    ) {
+      return res.status(400).json({ success: false, message: "Invalid data" });
+    }
+
+    const progressData = await CourseProgress.findOne({ userId, courseId });
+    res.json({ success: true, progressData });
   } catch (error) {
-    res.json({success:false,message:error.message});
-    
+    res.json({ success: false, message: error.message });
   }
-}
+};
 
-//Controller to Add user Rating to individual course
-export const addUserRating=async(req,res)=>{
-    const {userId}=getAuth(req);
-    const {courseId,rating}=req.body;
-    
-    if(!courseId || !userId || !rating || rating<1 || rating>5){
-      return res.json({success:false,message:'Invalid Details'});
+/* =========================
+   ADD USER RATING
+========================= */
+export const addUserRating = async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    const { courseId, rating } = req.body;
+
+    if (
+      !userId ||
+      !courseId ||
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(courseId) ||
+      rating < 1 ||
+      rating > 5
+    ) {
+      return res.status(400).json({ success: false, message: "Invalid details" });
     }
 
-    //if all these details are valid then
-    try {
-      const courseData=await Course.findById(courseId);
-
-      if(!courseData){
-        return res.json({success:false,message:'Course not found'});
-      }
-      const userData=await User.findById(userId);
-      //if the courseId is not available in enrolledCourseData then we cannot rate the course if its available then only we can rate a course as its enrolled otherwise its not enrolled
-      if(!userData || !userData.enrolledCourses.includes(courseId)){
-        return res.json({success:false,message:'User has not purchased this course'});
-      }
-
-      //if we have purchased then is rating provided or not
-      const existingRatingIndex=courseData.courseRatings.findIndex(r=> r.userId===userId);
-
-      //if the rating is already provided by the user then we have to update them
-      if(existingRatingIndex > -1){
-        courseData.courseRatings[existingRatingIndex].rating=rating;
-      }
-      //if User has not given rating earlier
-      else{
-        courseData.courseRatings.push({
-          userId,rating
-        })
-      }
-      await Course.save();
-      res.json({success:true,message:'Rating Added'});
-    } catch (error) {
-      res.json({success:false,message:error.message});
+    const courseData = await Course.findById(courseId);
+    if (!courseData) {
+      return res.json({ success: false, message: "Course not found" });
     }
 
-}
+    const userData = await User.findById(userId);
+    if (!userData || !userData.enrolledCourses.includes(courseId)) {
+      return res.json({ success: false, message: "User has not purchased this course" });
+    }
+
+    const existingRatingIndex = courseData.courseRatings.findIndex(
+      (r) => r.userId.toString() === userId.toString()
+    );
+
+    if (existingRatingIndex > -1) {
+      courseData.courseRatings[existingRatingIndex].rating = rating;
+    } else {
+      courseData.courseRatings.push({ userId, rating });
+    }
+
+    await courseData.save();
+    res.json({ success: true, message: "Rating added" });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
