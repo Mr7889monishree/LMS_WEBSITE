@@ -6,6 +6,8 @@ import { assets } from '../../assets/assets';
 import humanizeDuration from 'humanize-duration';
 import Footer from '../../Components/Student/Footer';
 import YouTube from 'react-youtube'
+import axios from 'axios';
+import { toast } from 'react-toastify';
 const CourseDetails = () => { 
   const {id}=useParams();//to get the particular course id from the url
 
@@ -15,17 +17,64 @@ const CourseDetails = () => {
   const [playerData,setPlayerData]=useState(null);
   const [isAlreadyenrolled,setIsAlreadyEnrolled]=useState(false);
   //using this id we will find particular course with that id from allcourses
-  const {currency,allcourses,calculateRating,calculateChapterTime,courseDuration,CalculateNoOfLectures}=useContext(AppContext);
+  const {currency,allcourses,calculateRating,calculateChapterTime,courseDuration,CalculateNoOfLectures,
+    backendUrl,userData,getToken
+  }=useContext(AppContext);
 
   //function for fetching individual course data
   const fetchCourse=async()=>{
-    const CourseId=allcourses.find(course => course._id === id);
-    setCourseData(CourseId);
+    try {
+      //individula course data
+      const {data}=await axios.get(backendUrl+'/api/course/'+id);
+      
+      if(data.success){
+        setCourseData(data.courseData);
+      }
+      else{
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
   }
+  //Function to enrollCourse so that user can enroll and purchase the course
+  const enrollCourse = async () => {
+  try {
+    if (!userData) return toast.warn('Login to Enroll');
+
+    if (isAlreadyenrolled) return toast.warn('Already Enrolled');
+
+    const token = await getToken();
+
+    //Send the actual course _id (as string) to backend
+    const { data } = await axios.post(backendUrl+
+      '/api/user/purchase',
+      {courseId:courseData._id},
+      {headers:{Authorization:`Bearer ${token}`}}
+    )
+    if (data.success) {
+      const {session_url}=data;
+      window.location.replace(session_url);
+    } else {
+      toast.error(data.message);
+    }
+
+  } catch (error) {
+    toast.error(error.message);
+  }
+};
+
   //course data now available
   useEffect(()=>{
     fetchCourse();
-  },[allcourses])
+  },[])
+  useEffect(() => {
+  if (userData?.enrolledCourses?.length && courseData?._id) {
+    const enrolledIds = userData.enrolledCourses.map(e => e.toString());
+    setIsAlreadyEnrolled(enrolledIds.includes(courseData._id.toString()));
+  }
+}, [userData, courseData]);
+
   //toggle function
   const toggleSection=(index)=>{
     setOpenSection((prev)=>(
@@ -63,7 +112,7 @@ const CourseDetails = () => {
               {courseData.enrolledStudents.length > 1 ? 'students':'student'}
             </p>
           </div>
-          <p className='text-sm'>Course by <span className='text-blue-600 underline'>MindLeap</span></p>
+          <p className='text-sm'>Course by <span className='text-blue-600 underline'>{courseData.educatorId.name}</span></p>
           <div className='pt-8 text-gray-800'>
             <h2 className='text-xl font-semibold'>Course Structure</h2>
             <div className='pt-5'>
@@ -92,7 +141,7 @@ const CourseDetails = () => {
                           <img src={assets.play_icon} alt="play icon"
                           className='w-4 h-4 mt-1' />
                           <div className='flex items-center justify-between w-full
-                          text-gray-800 text-xs md:text-default'>
+                          text-gray-800 text-xs md:text-default gap-3'>
                             <p>{lecture.lectureTitle}</p>
                             <div className='flex gap-2'>
                               {/**if the lecture is available for free preview then display this */}
@@ -120,7 +169,7 @@ const CourseDetails = () => {
         </div>
         {/* right column */}
         <div className='max-w-course-card z-10 shadow-custom-card rounded-t
-            md:rounded-none overflow-hidden bg-white min-w-[300px] sm:min-w-[420px] mx-auto'>
+            md:rounded-none overflow-hidden bg-white min-w-[300px] sm:min-w-[400px] mx-auto'>
               {/**course image and price details */}
             {
                 playerData ? 
@@ -167,8 +216,16 @@ const CourseDetails = () => {
                 <p>{CalculateNoOfLectures(courseData)} lessons</p>{/**total duration of the course */}
               </div>
             </div>
-            <button className='md:mt-6 mt-4 w-full py-3 px-2 rounded bg-blue-600 text-white font-medium'>{isAlreadyenrolled ?
-            'Already Enrolled' : 'Enroll Now'}</button>
+           <button
+        onClick={enrollCourse}
+        disabled={!courseData?._id || isAlreadyenrolled}
+        className={`w-full py-3 px-2 rounded font-medium ${
+          isAlreadyenrolled ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white'
+        }`}
+      >
+        {isAlreadyenrolled ? 'Already Enrolled' : 'Enroll Now'}
+</button>
+
 
             <div className='pt-6'>
               <p className='md:text-xl text-lg font-medium text-gray-800'>What's in the course?</p>

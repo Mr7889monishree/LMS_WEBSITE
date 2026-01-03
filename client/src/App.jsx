@@ -13,6 +13,7 @@ import MyCourses from './Pages/Educator/MyCourses'
 import StudentsEnrolled from './Pages/Educator/StudentsEnrolled'
 import Navbar from './Components/Student/Navbar'
 import "quill/dist/quill.snow.css";
+import {ToastContainer} from 'react-toastify';
 
 const App = () => {
   //whenever this path matches and after educator any other page in educator is opened means this navbar should be visible not the navbar designed for other pages 
@@ -20,6 +21,7 @@ const App = () => {
   const isEducatorRoute = useMatch('/educator/*')
   return (
     <div className='text-default min-h-screen bg-white'>
+      <ToastContainer/>
       {!isEducatorRoute && <Navbar/>}
       {/**this is only for students and other pages 
        * but when its for educator diff navbar will be shown

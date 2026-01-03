@@ -80,7 +80,7 @@ export const purchaseCourse = async (req, res) => {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${origin}/my-enrollments`,
+      success_url: `${origin}/loading/my-enrollments`,
       cancel_url: `${origin}/`,
       metadata: { purchaseId: newPurchase._id.toString() }
     });
